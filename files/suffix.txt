@@ -1,0 +1,9 @@
+Begin!
+
+Question: {input}
+Thought: {agent_scratchpad}
+
+When providing a final answer, include both the SQL query and a description of what the query does in this format:
+Final Answer: 
+SQL Query: [The SQL query]
+Description: [A clear explanation of what the query does and how it answers the user's question]
