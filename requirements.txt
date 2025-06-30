@@ -76,3 +76,9 @@ Werkzeug==3.0.6
 yarl==1.20.1
 zipp==3.23.0
 zstandard==0.23.0
+transformers==4.44.0
+torch==2.3.1
+sentence-transformers==3.0.1
+accelerate==0.32.1
+bitsandbytes==0.43.1
+safetensors>=0.4.3

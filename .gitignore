@@ -263,6 +263,7 @@ settings.local.py
 # API keys and secrets
 secrets.json
 .secrets
+config.json
 
 # Upload directories (if you have file uploads)
 uploads/
@@ -273,3 +274,8 @@ temp_uploads/
 
 # Ollama models (if downloaded locally)
 ollama_models/
+
+# Local model directories
+gemma2b-4bit/
+*.bin
+*.safetensors

@@ -1,4 +1,5 @@
-from langchain_ollama import OllamaLLM, OllamaEmbeddings
+from langchain_community.llms import HuggingFacePipeline
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.utilities import SQLDatabase
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain_community.vectorstores import FAISS, Chroma
@@ -14,6 +15,9 @@ from sqlalchemy import create_engine,text, MetaData, Table
 import pandas as pd
 from datetime import datetime
 import os
+import json
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
  
 
 #Using Hugginface approach
@@ -28,16 +32,92 @@ with open(os.path.join(current_dir, 'files', 'sytem_prefix.txt'), 'r') as file:
 with open(os.path.join(current_dir, 'files', 'suffix.txt'), 'r') as file:
     suffix = file.read()
 
+# Load configuration for Hugging Face token
+with open(os.path.join(current_dir, 'config.json'), 'r') as f:
+    config = json.load(f)
+hf_token = config['huggingface_token']
+
 # Initialize these as None, they will be created on first use
 _example_selector = None
 _embedding = None
+_llm = None
+_tokenizer = None
+_model = None
+
+def load_gemma_model():
+    """Load the local Gemma 2B model or download from Hugging Face"""
+    global _model, _tokenizer
+    
+    if _model is None or _tokenizer is None:
+        # Try to load from local directory first
+        local_model_path = os.path.join(current_dir, 'gemma2b-4bit')
+        
+        if os.path.exists(local_model_path):
+            print("Loading model from local directory...")
+            model_path = local_model_path
+        else:
+            print("Loading model from Hugging Face...")
+            model_path = "google/gemma-2b"
+        
+        # Load tokenizer
+        _tokenizer = AutoTokenizer.from_pretrained(
+            model_path, 
+            token=hf_token if not os.path.exists(local_model_path) else None,
+            local_files_only=os.path.exists(local_model_path)  # Only use local files if available
+        )
+        
+        # Load model with appropriate settings for local vs remote
+        if os.path.exists(local_model_path):
+            # Load local quantized model
+            _model = AutoModelForCausalLM.from_pretrained(
+                model_path,
+                torch_dtype=torch.float16,
+                device_map="auto",
+                local_files_only=True
+            )
+        else:
+            # Load from Hugging Face
+            _model = AutoModelForCausalLM.from_pretrained(
+                model_path,
+                torch_dtype=torch.float16,
+                device_map="auto",
+                token=hf_token
+            )
+        
+        # Add padding token if it doesn't exist
+        if _tokenizer.pad_token is None:
+            _tokenizer.pad_token = _tokenizer.eos_token
+    
+    return _model, _tokenizer
 
 def build_llm():
-    llm = OllamaLLM(model="gemma2:2b", temperature=0.1)
-    global _embedding
+    global _llm, _embedding
+    
+    if _llm is None:
+        # Load the Gemma model
+        model, tokenizer = load_gemma_model()
+        
+        # Create a text generation pipeline
+        text_generation_pipeline = pipeline(
+            "text-generation",
+            model=model,
+            tokenizer=tokenizer,
+            max_new_tokens=512,
+            temperature=0.1,
+            do_sample=True,
+            pad_token_id=tokenizer.eos_token_id
+        )
+        
+        # Wrap it in HuggingFacePipeline for LangChain
+        _llm = HuggingFacePipeline(pipeline=text_generation_pipeline)
+    
     if _embedding is None:
-        _embedding = OllamaEmbeddings(model="nomic-embed-text")
-    return llm, _embedding
+        # Use a smaller, efficient embedding model
+        _embedding = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2"
+        )
+    
+    return _llm, _embedding
 
 def get_example_selector(embedding):
     global _example_selector
