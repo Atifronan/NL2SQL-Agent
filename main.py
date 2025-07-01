@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import uvicorn
-import ai
+import ai as ai
 import functions
 from sqlalchemy import create_engine, inspect, text
 from datetime import datetime
